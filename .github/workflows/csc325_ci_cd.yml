@@ -1,0 +1,124 @@
+name: CSC 325 CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the requested commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify project files and runtime
+        run: |
+          python --version
+          test -f manage.py
+          test -f requirements.txt
+          test -f render.yaml
+
+  dependencies:
+    name: Dependencies
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the same commit
+        uses: actions/checkout@v4
+      - name: Set up Python and dependency cache
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Build and install the pinned dependency wheels
+        run: |
+          python -m pip wheel --wheel-dir wheelhouse --requirement requirements.txt
+          python -m pip install --no-index --find-links wheelhouse --requirement requirements.txt
+          python -m pip check
+      - name: Save dependencies for the test job
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels
+          path: wheelhouse/
+          if-no-files-found: error
+          retention-days: 1
+
+  test:
+    name: Test
+    needs: dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DJANGO_DEBUG: 'true'
+    steps:
+      - name: Check out the same commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve the prepared dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheels
+          path: wheelhouse/
+      - name: Install the prepared dependencies
+        run: python -m pip install --no-index --find-links wheelhouse --requirement requirements.txt
+      - name: Check Django and run the complete test suite
+        run: |
+          python manage.py check
+          python manage.py test --verbosity 2
+      - name: Record the API response from this tested checkout
+        run: python scripts/capture_api_contract.py "$RUNNER_TEMP/expected-hello.json"
+      - name: Save the expected public API response
+        uses: actions/upload-artifact@v4
+        with:
+          name: expected-api
+          path: ${{ runner.temp }}/expected-hello.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    name: Deploy
+    needs: test
+    # PRs run all validation above, but only a tested push to main can deploy.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: csc325-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.APP_BASE_URL }}
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve the tested API response
+        uses: actions/download-artifact@v4
+        with:
+          name: expected-api
+          path: .ci-api-contract/
+      - name: Deploy this exact commit and verify the public API
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          EXPECTED_REVISION: ${{ github.sha }}
+          EXPECTED_HELLO_PATH: .ci-api-contract/expected-hello.json
+        run: python scripts/deploy_render.py

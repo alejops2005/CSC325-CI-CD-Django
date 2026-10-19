@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Deployment output and local environment overrides
+staticfiles/
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+wheelhouse/

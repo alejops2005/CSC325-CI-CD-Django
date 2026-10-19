@@ -1,0 +1,22 @@
+# Create this Blueprint once, then let the tested GitHub Actions job deploy.
+services:
+  - type: web
+    name: csc325-ci-cd-django
+    runtime: python
+    plan: free
+    branch: main
+    autoDeployTrigger: 'off'
+    buildCommand: pip install -r requirements.txt && python manage.py check --deploy --fail-level WARNING
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --no-control-socket
+    healthCheckPath: /api/health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
+      - key: DJANGO_DEBUG
+        value: 'false'
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://*.onrender.com
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: 'true'

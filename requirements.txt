@@ -1,0 +1,5 @@
+# Runtime dependencies for Python 3.12, including resolved transitive dependencies.
+asgiref==3.12.1
+Django==5.2.18
+djangorestframework==3.18.3
+sqlparse==0.6.0

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: csc325-ci-cd-django
+    runtime: python
+    plan: free
+    branch: main
+    autoDeployTrigger: 'off'
+    buildCommand: pip install -r requirements.txt && python manage.py check
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DJANGO_DEBUG
+        value: 'false'
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: APP_REVISION
+        value: local

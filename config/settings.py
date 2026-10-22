@@ -37,6 +37,8 @@ ALLOWED_HOSTS = [
     ).split(",")
     if host.strip()
 ]
+if os.environ.get('RENDER_EXTERNAL_HOSTNAME'):
+    ALLOWED_HOSTS.append(os.environ['RENDER_EXTERNAL_HOSTNAME'])
 
 
 # Application definition
@@ -142,4 +144,10 @@ REST_FRAMEWORK = {
 }
 
 # Override this non-secret value to identify the application revision at runtime.
-APP_REVISION = os.environ.get("APP_REVISION") or "local"
+APP_REVISION = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("APP_REVISION") or "local"
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000

@@ -36,7 +36,9 @@ The written assignment requires a **running, publicly reachable app**, not an `e
 - Use the health-check path `/api/health/`.
 - Set **Auto-Deploy = Off**, so the tested GitHub Actions Deploy job controls production releases. For a manual Render web service, do **not** assume `render.yaml` changes your dashboard settings automatically.
 - Render environment: `PYTHON_VERSION=3.12.8`, `DJANGO_DEBUG=false`, and a securely generated `DJANGO_SECRET_KEY`. Do not commit this secret. `RENDER_EXTERNAL_HOSTNAME` and `RENDER_GIT_COMMIT` are supplied by Render and read by Django.
-- Render service must be created before a main production run can succeed. Creating a web service may start its initial deployment, so do this only when ready.
+- **Bootstrapping note:** The production backend and Gunicorn configuration currently live on PR #3. Before that PR is merged, `main` does not contain the final deployable app. Don't attempt to create a working Render service from today's `main` and expect it to build.
+- At deployment time, the simplest sequence is **merge tested PR #3 → create Render Web Service from updated `main` → configure GitHub credentials → re-run the failed Deploy job**. A first main-branch Deploy attempt can fail because the Render service/secrets don't exist yet; this is expected bootstrap work, **not** submission evidence. The first Render provisioning itself may start an initial deploy; do this only when ready.
+- Keep Render's **Auto-Deploy Off** so later releases originate from the tested GitHub Actions Deploy job rather than being independently triggered by every push.
 
 ## 4. Set GitHub Actions deployment credentials (manual GitHub settings step)
 
@@ -52,9 +54,10 @@ Never paste API keys into chat, screen recordings, PRs, or code.
 
 ## 5. Baseline merge and first production deployment — later
 
-- [ ] After the three PR checks pass and Render configuration is ready, merge PR #3 into protected `main`.
-- [ ] Open the newly triggered **push-to-main** Actions run, not just the pull-request run.
-- [ ] Verify **Setup → Dependencies → Test → Deploy** are all green.
+- [ ] After the three PR checks pass and the main ruleset is saved, **when you are ready to start deploying**, merge PR #3 into protected `main`. Do **not** do this during pre-deployment preparation.
+- [ ] The push-to-main run begins automatically. Setup, Dependencies, and Test should pass. **Deploy may fail initially** because there is no Render service/secrets yet; do not mistake that bootstrap failure for a finished assignment.
+- [ ] Create the Render Web Service from the now-updated `main` and enter the credentials/URL configuration listed above. Render's initial service creation may perform its own first deploy.
+- [ ] In GitHub Actions, re-run the failed Deploy job or re-run all jobs, as appropriate. Verify **Setup → Dependencies → Test → Deploy** are all green.
 - [ ] Inspect each job log, including the deployed commit and the verified public API URL.
 - [ ] Open `https://YOUR-ACTUAL-RENDER-HOST/api/hello/` and `/api/health/` in a private window.
 - [ ] Confirm `health.revision` equals the main workflow run's actual Git SHA.

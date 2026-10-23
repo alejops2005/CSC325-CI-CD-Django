@@ -47,7 +47,7 @@ Pull requests intentionally **skip Deploy**; only the main-branch production run
 
 Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete **pre-deploy checklist**, Render settings, GitHub Secrets/variables, required ruleset checks, and final video/submission steps.
 
-**Do not deploy or merge the CI/CD PR until its required checks are configured and Render is ready**, unless intentionally accepting a failed initial production Deploy run. Keep the final demonstration change uncommitted/unpushed until recording.
+**Do not merge PR #3 while deferring deployment.** When ready, first enforce the PR's Setup/Dependencies/Test checks, then merge into main and bootstrap Render from the now-deployable main branch. The first production Deploy job may fail before hosting credentials exist; configure Render and rerun it to green. See the detailed checklist. Keep the final on-camera demonstration change uncommitted/unpushed until recording.
 
 ## Assignment evidence
 

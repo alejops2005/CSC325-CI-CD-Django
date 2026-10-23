@@ -68,6 +68,10 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    concurrency:
+      group: csc325-production
+      cancel-in-progress: false
     environment: production
     steps:
       - name: Check out tested revision

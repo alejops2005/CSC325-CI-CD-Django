@@ -18,8 +18,13 @@ class PublicApiTests(SimpleTestCase):
                 "message": "Hello from CSC 325!",
                 "course": "CSC 325",
                 "module": 8,
+                "demonstration": "CI/CD works!",
             },
         )
+
+    def test_hello_includes_demonstration_field(self):
+        response = self.client.get(reverse("hello"))
+        self.assertEqual(response.json()["demonstration"], "CI/CD works!")
 
     def test_health_reports_ok(self):
         response = self.client.get(reverse("health"))

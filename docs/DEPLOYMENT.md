@@ -1,87 +1,89 @@
-# CSC 325 — pre-deployment checklist
+# Deployment
 
-This is a **preparation checklist**, not proof of a completed deployment. Production deployment and the narrated on-camera change are intentionally reserved for later.
+## Historical production baseline
 
-## 1. Verify the code and workflow
+The Render service is already configured and working at [https://csc325-ci-cd-django.onrender.com](https://csc325-ci-cd-django.onrender.com).
 
-- [ ] Open PR #3: https://github.com/alejops2005/CSC325-CI-CD-Django/pull/3
-- [ ] Check **Setup, Dependencies, Test** completed successfully for the latest PR commit. The pull-request Deploy job is intentionally **skipped**.
-- [ ] Review `api/views.py`, `api/tests.py`, `requirements.txt`, and `.github/workflows/csc325_ci_cd.yml`.
-- [ ] Read a real **Test** job log to confirm all **six** API tests passed. Do not treat a green job alone as a deployment.
-- [ ] Confirm the repository is public and `main` is the default branch.
-- [ ] Keep a small new API behavior change and corresponding test for the final on-camera demonstration.
+The [successful baseline production workflow](https://github.com/alejops2005/CSC325-CI-CD-Django/actions/runs/39888598055) completed for commit `9489c5f3c4a72fd12c23bc7c8e2050c167f5dc35`, the merge of PR #3. Baseline preparation and the initial production deployment are complete.
 
-## 2. Strengthen the existing GitHub main ruleset (manual GitHub settings step)
+Before the final demonstration, that baseline revision contained six automated tests and no demonstration field. The demonstration change, prepared on `feature/final-api-demo`, adds `"demonstration": "CI/CD works!"` and brings the suite to seven tests. The baseline workflow remains historical evidence after the final change is released. Determine the current deployment from the latest successful main workflow, live health revision, and hello response.
 
-Open https://github.com/alejops2005/CSC325-CI-CD-Django/rules/25436132
+## Deployment process
 
-- Target: default branch (`main`).
-- Enforcement: **Active**.
-- Require a **pull request before merging** (zero required other-person approvals is reasonable for a solo project).
-- Block **force pushes** and **deletion**.
-- Require successful status checks: **Setup**, **Dependencies**, and **Test**. Select them from the latest passing PR workflow run. Keep **Deploy off the PR-required list**; it skips on PRs.
-- Require branches to be up to date before merging (strict). Don't add a bypass unless the instructor explicitly requires one.
-- Save, reopen the ruleset, and confirm the three named required status checks are stored.
+[The GitHub Actions workflow](../.github/workflows/csc325_ci_cd.yml) runs Setup → Dependencies → Test → Deploy. Setup selects Python 3.12 and checks project files. Dependencies installs requirements and checks consistency. Test executes Django checks and the complete suite.
 
-A ruleset with an empty required-check list does not enforce test success even if its “require status checks” option is enabled.
+Pull requests targeting `main` run the first three jobs; Deploy is skipped. After a tested pull request is merged, the push to `main` starts a new workflow. Deploy depends on Test and runs only for a push to `refs/heads/main`. A failed prerequisite prevents deployment.
 
-## 3. Configure Render web hosting — do this only when ready to deploy
+The Deploy job uses the `production` GitHub environment and serializes releases through the `csc325-production` concurrency group. It runs `scripts/deploy_render.py` with the workflow's exact Git SHA. The script requests that commit through the Render API, waits for the deployment to become live, verifies Render's deployed commit, and checks `/api/health/` and `/api/hello/`. The health revision must equal the tested SHA. The script checks the hello course value; the final demonstration field needs explicit live verification.
 
-The written assignment requires a **running, publicly reachable app**, not an `echo "Deploying"` placeholder.
+## Render configuration
 
-- Create **Render → New → Web Service**, source `alejops2005/CSC325-CI-CD-Django`, branch `main`, Python 3 runtime, root directory blank.
-- Select an allowed plan (e.g. Free if available and acceptable). Review any billing implications.
-- Build: `pip install -r requirements.txt && python manage.py check`
-- Start: `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
-- Use the health-check path `/api/health/`.
-- Set **Auto-Deploy = Off**, so the tested GitHub Actions Deploy job controls production releases. For a manual Render web service, do **not** assume `render.yaml` changes your dashboard settings automatically.
-- Render environment: `PYTHON_VERSION=3.12.8`, `DJANGO_DEBUG=false`, and a securely generated `DJANGO_SECRET_KEY`. Do not commit this secret. `RENDER_EXTERNAL_HOSTNAME` and `RENDER_GIT_COMMIT` are supplied by Render and read by Django.
-- **Bootstrapping note:** The production backend and Gunicorn configuration currently live on PR #3. Before that PR is merged, `main` does not contain the final deployable app. Don't attempt to create a working Render service from today's `main` and expect it to build.
-- At deployment time, the simplest sequence is **merge tested PR #3 → create Render Web Service from updated `main` → configure GitHub credentials → re-run the failed Deploy job**. A first main-branch Deploy attempt can fail because the Render service/secrets don't exist yet; this is expected bootstrap work, **not** submission evidence. The first Render provisioning itself may start an initial deploy; do this only when ready.
-- Keep Render's **Auto-Deploy Off** so later releases originate from the tested GitHub Actions Deploy job rather than being independently triggered by every push.
+Keep the existing web service connected to this repository and branch `main`. The configuration in [`render.yaml`](../render.yaml) describes:
 
-## 4. Set GitHub Actions deployment credentials (manual GitHub settings step)
+| Setting | Value |
+| --- | --- |
+| Runtime | Python; configured version `3.12.8` |
+| Build command | `pip install -r requirements.txt && python manage.py check` |
+| Start command | `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT` |
+| Health check | `/api/health/` |
+| Automatic deploys | Off; GitHub Actions controls releases |
 
-Under **Settings → Secrets and variables → Actions**:
+For a service configured manually in Render, changes to `render.yaml` do not automatically update dashboard settings. Keep the dashboard consistent with the intended configuration.
 
-| Type | Name | Value |
+## Branch protection and required checks
+
+Use the [main branch ruleset](https://github.com/alejops2005/CSC325-CI-CD-Django/rules/25436132) to enforce:
+
+- Active enforcement for `main`, with pull requests required before merging.
+- Required status checks named **Setup**, **Dependencies**, and **Test**.
+- Branches up to date before merging, with force pushes and branch deletion blocked.
+
+Confirm these settings in GitHub before recording; local workflow YAML does not prove that server-side rules are enabled. The required-check list must actually contain all three checks. Do not require Deploy on pull requests, where it is skipped. For a solo assignment, use the approval requirement permitted by the course without bypassing required checks.
+
+## Secrets and environment variables
+
+Configure deployment credentials through GitHub Settings → Secrets and variables → Actions, at a scope available to the `production` job:
+
+| Type | Name | Purpose |
 | --- | --- | --- |
-| Repository secret | `RENDER_API_KEY` | Render API key from your account |
-| Repository secret | `RENDER_SERVICE_ID` | Render service ID beginning `srv-` |
-| Repository variable | `APP_BASE_URL` | Actual public Render HTTPS origin, no `/api/` path |
+| GitHub secret | `RENDER_API_KEY` | Authorizes Render API deployment requests |
+| GitHub secret | `RENDER_SERVICE_ID` | Identifies the existing Render service |
+| GitHub variable | `APP_BASE_URL` | `https://csc325-ci-cd-django.onrender.com`, without an API path |
 
-Never paste API keys into chat, screen recordings, PRs, or code.
+In Render, maintain `DJANGO_DEBUG=false`, a securely generated `DJANGO_SECRET_KEY`, and the configured `PYTHON_VERSION`. Render supplies `RENDER_EXTERNAL_HOSTNAME` and `RENDER_GIT_COMMIT`; Django uses them for the allowed production host and deployed revision. `RENDER_GIT_COMMIT` takes precedence over the optional `APP_REVISION` fallback.
 
-## 5. Baseline merge and first production deployment — later
+Keep credential values in the relevant secret stores. Never commit them, paste them into documentation or PRs, print them in logs, or show them in the recording. Only variable names and public URLs belong in demonstration evidence.
 
-- [ ] After the three PR checks pass and the main ruleset is saved, **when you are ready to start deploying**, merge PR #3 into protected `main`. Do **not** do this during pre-deployment preparation.
-- [ ] The push-to-main run begins automatically. Setup, Dependencies, and Test should pass. **Deploy may fail initially** because there is no Render service/secrets yet; do not mistake that bootstrap failure for a finished assignment.
-- [ ] Create the Render Web Service from the now-updated `main` and enter the credentials/URL configuration listed above. Render's initial service creation may perform its own first deploy.
-- [ ] In GitHub Actions, re-run the failed Deploy job or re-run all jobs, as appropriate. Verify **Setup → Dependencies → Test → Deploy** are all green.
-- [ ] Inspect each job log, including the deployed commit and the verified public API URL.
-- [ ] Open `https://YOUR-ACTUAL-RENDER-HOST/api/hello/` and `/api/health/` in a private window.
-- [ ] Confirm `health.revision` equals the main workflow run's actual Git SHA.
-- [ ] Do not claim the app is deployed merely because PR checks passed or Render settings were entered.
+## Final recording procedure
 
-## 6. Reserve the required on-camera final change
+Before recording, keep all four prepared files (`README.md`, `docs/DEPLOYMENT.md`, `api/views.py`, and `api/tests.py`) local and uncommitted. The steps below describe the transition from preparation to a deployed demonstration revision. After completing them, use the resulting workflow and live responses as release evidence. Allow time for hosted builds and edit out waiting while retaining the required evidence. The final narrated video must fit the five-minute assignment limit.
 
-After the baseline is successfully deployed, create a **new feature branch** from current `main`. Prepare a small API change, e.g. add `"demonstration": "CI/CD works!"` to `/api/hello/`, and add a test asserting that field.
+1. Introduce the project and show the [public repository](https://github.com/alejops2005/CSC325-CI-CD-Django). Show the pre-demonstration live baseline and explain that its six-test implementation lacks the new field. This is the historical starting point for the recording, followed by the final deployed result.
+2. Show `feature/final-api-demo`, the local Git diff, the new hello field, the updated expected response, and `test_hello_includes_demonstration_field`.
+3. Run the local checks with the existing Windows virtual environment:
 
-**Do not commit or push this final change before the video.** During the recorded demonstration:
-1. State your name and show the public repo URL.
-2. Show `csc325_ci_cd.yml`, the push-to-main trigger, each of four jobs, and explain why `needs: test` prevents early Deploy.
-3. Show the changed endpoint and test, and execute the full local suite.
-4. Commit and push the change on camera to its feature branch; open a PR and merge into protected `main` once checks pass.
-5. Show the resulting **main** Actions run, open logs for all four stages, and show their green results.
-6. Open the public URL to show the newly deployed field and matching health revision.
+   ```powershell
+   git diff --check
+   .\.venv\Scripts\python.exe manage.py check
+   .\.venv\Scripts\python.exe manage.py test --verbosity 2
+   git status --short --branch
+   ```
 
-The final video must be **at most five minutes**; edit out waiting, not the required evidence. Keep narration in your own voice and follow any course AI disclosure rules.
+   Show seven passing tests. If the environment cannot execute Python, repair it and obtain passing results before continuing.
+4. During recording, stage the four prepared files, commit them, and push `feature/final-api-demo`. Create a pull request targeting `main`.
+5. Show the PR's required Setup, Dependencies, and Test checks passing, with Deploy skipped. Merge only after the required checks and branch rules are satisfied.
+6. Open the resulting push-to-main Actions run. Explain the four jobs and `needs: test`, then show successful Setup, Dependencies, Test, and Deploy logs for the merged revision.
+7. Open the [live hello endpoint](https://csc325-ci-cd-django.onrender.com/api/hello/) and verify `"demonstration": "CI/CD works!"`. Open the [live health endpoint](https://csc325-ci-cd-django.onrender.com/api/health/) and confirm `status` is `ok` and `revision` matches the main workflow's deployed SHA.
 
-## 7. Four Brightspace submissions
+A passing local suite or PR does not establish a production release. Use the successful main workflow and live API response as evidence that the demonstration change reached production.
 
-- [ ] Video file or unlisted YouTube link accessible without an account.
-- [ ] Public GitHub repository: https://github.com/alejops2005/CSC325-CI-CD-Django
-- [ ] Exact successful push-to-main Actions run for the **on-camera** change.
-- [ ] Actual public API URL showing that change.
+## Final assignment submission checklist
 
-Check access to each submitted link in a logged-out/private browser window.
+- [ ] Narrated video, at most five minutes, submitted as the required file or an accessible unlisted link.
+- [ ] Public repository: [CSC325-CI-CD-Django](https://github.com/alejops2005/CSC325-CI-CD-Django).
+- [ ] Exact successful push-to-main Actions run for the recorded demonstration change; the linked baseline run is historical evidence, not a substitute for the final run.
+- [ ] Public [hello API](https://csc325-ci-cd-django.onrender.com/api/hello/) displaying the demonstration field.
+- [ ] Health revision matches the final deployed workflow SHA.
+- [ ] Recording shows the code/test change, seven local tests, commit and push, PR checks, merge, four successful production stages, and live verification.
+- [ ] Submission links work in a logged-out/private browser window.
+- [ ] Any required disclosure of AI assistance follows course policy; no credentials appear in evidence.

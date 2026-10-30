@@ -1,56 +1,75 @@
-# CSC 325 — Django REST API and GitHub Actions CI/CD
+# CSC 325: Django REST API and CI/CD
 
-A small **Django + Django REST Framework** backend built for the CSC 325 Module 8 hands-on assignment. The repository provides a public API, automated tests, a four-stage GitHub Actions workflow, and configuration for a future Render deployment.
+This project demonstrates a complete continuous integration and continuous deployment workflow for a public Python API. Django provides the application framework and configuration, Django REST Framework handles JSON responses and API testing, GitHub Actions validates changes, and Render hosts the production service with Gunicorn.
+
+- [GitHub repository](https://github.com/alejops2005/CSC325-CI-CD-Django)
+- [Successful baseline production workflow](https://github.com/alejops2005/CSC325-CI-CD-Django/actions/runs/39888598055)
+- [Live service](https://csc325-ci-cd-django.onrender.com)
+- [Live hello API](https://csc325-ci-cd-django.onrender.com/api/hello/) and [live health API](https://csc325-ci-cd-django.onrender.com/api/health/)
+
+## Historical production baseline and final demonstration
+
+Before the final demonstration, the successfully deployed baseline was commit `9489c5f3c4a72fd12c23bc7c8e2050c167f5dc35`. That historical revision contains **six tests**, and its hello response does **not** include the demonstration field. The linked baseline workflow documents that earlier release, not necessarily the current production revision.
+
+The final demonstration change, prepared on `feature/final-api-demo`, brings the suite to **seven tests**. It adds `"demonstration": "CI/CD works!"` to the hello response, updates the expected JSON, and adds `test_hello_includes_demonstration_field`. Before recording, keep the change uncommitted and unpushed. During recording, take it through the pull request and production pipeline. Determine its current release status from the latest successful main workflow, live health revision, and hello response; local test success alone does not update production.
 
 ## Public API
 
-| Method | Route | Example response |
-| --- | --- | --- |
-| GET | `/api/hello/` | `{"message":"Hello from CSC 325!","course":"CSC 325","module":8}` |
-| GET | `/api/health/` | `{"status":"ok","revision":"local"}` during local development |
+Both endpoints accept GET requests and return JSON without authentication.
 
-Other HTTP methods on these GET-only routes return HTTP 405. Unknown routes return HTTP 404. On Render, the health response's `revision` should match the Git commit being deployed.
+| Endpoint | Historical baseline response |
+| --- | --- |
+| `/api/hello/` | `{"message":"Hello from CSC 325!","course":"CSC 325","module":8}` |
+| `/api/health/` | `{"status":"ok","revision":"<deployed Git commit SHA>"}` |
 
-## Run locally
+The hello response introduced by the final demonstration change is:
 
-Python 3.12 is configured in `.python-version`. From the repository root:
-
-```bash
-python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-# macOS / Linux: source .venv/bin/activate
-python -m pip install -r requirements.txt
-python manage.py check
-python manage.py test --verbosity 2
-python manage.py runserver
+```json
+{
+  "message": "Hello from CSC 325!",
+  "course": "CSC 325",
+  "module": 8,
+  "demonstration": "CI/CD works!"
+}
 ```
 
-Visit `http://127.0.0.1:8000/api/hello/` and `http://127.0.0.1:8000/api/health/` locally. The six automated API tests cover normal responses, the configured revision, wrong HTTP methods, and missing routes.
+Locally, the health revision defaults to `local`. In production, Django reads `RENDER_GIT_COMMIT` so the revision identifies the deployed source. POST requests to these endpoints return 405; an unknown API route returns 404.
 
-## CI/CD workflow
+## Run locally with Windows PowerShell
 
-The single file `.github/workflows/csc325_ci_cd.yml` runs on:
-- Every **push to `main`**.
-- Pull requests targeting `main` (so changes can be checked before merging).
+Use Python 3.12 and the existing project virtual environment from the repository root. Calling its interpreter directly avoids activation and PATH dependencies.
 
-It defines four jobs in order using `needs:`:
-1. **Setup** — check out the repository and select Python 3.12.
-2. **Dependencies** — install packages from `requirements.txt` and check consistency.
-3. **Test** — run Django checks and the **full** automated test suite. A failing test fails this job and stops deployment.
-4. **Deploy** — on a tested **push to `main` only**, request deployment of that exact commit to Render, then verify the public health and hello APIs.
+```powershell
+# Install dependencies only when setting up or refreshing the environment.
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-Pull requests intentionally **skip Deploy**; only the main-branch production run should have all four jobs green.
+# Run system checks and the complete suite.
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe manage.py test --verbosity 2
 
-## Production configuration
+# Start the local development server.
+.\.venv\Scripts\python.exe manage.py runserver
+```
 
-`render.yaml` documents the intended Python web service, and `scripts/deploy_render.py` handles a verified deployment. Rendering the YAML, merging code, or obtaining a green PR check **does not mean a live application has been deployed**.
+The final demonstration revision should report seven passing tests. The historical baseline revision has six. Tests cover response content and status, configured health revision, rejected POST requests, a missing route, and the added demonstration field. These read-only API tests use `SimpleTestCase` and do not require a test database.
 
-Read [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete **pre-deploy checklist**, Render settings, GitHub Secrets/variables, required ruleset checks, and final video/submission steps.
+Open `http://127.0.0.1:8000/api/hello/` or `http://127.0.0.1:8000/api/health/`. A missing or broken `.venv` must be repaired with an installed Python 3.12 interpreter before these commands can run.
 
-**Do not merge PR #3 while deferring deployment.** When ready, first enforce the PR's Setup/Dependencies/Test checks, then merge into main and bootstrap Render from the now-deployable main branch. The first production Deploy job may fail before hosting credentials exist; configure Render and rerun it to green. See the detailed checklist. Keep the final on-camera demonstration change uncommitted/unpushed until recording.
+## GitHub Actions pipeline
 
-## Assignment evidence
+The workflow in [`.github/workflows/csc325_ci_cd.yml`](.github/workflows/csc325_ci_cd.yml) executes **Setup → Dependencies → Test → Deploy** through job dependencies:
 
-Submit the public repository, a specific green four-stage push-to-main Actions run, the public API URL, and a narrated recording (at most five minutes). The recording must show the real code/test change, local tests, commit and push, successful stage logs, and the live deployed result.
+1. **Setup:** checks out source, selects Python 3.12, and verifies required project files.
+2. **Dependencies:** installs pinned requirements and runs `pip check`.
+3. **Test:** runs Django system checks and the complete automated test suite.
+4. **Deploy:** requests a Render deployment of the exact tested commit and verifies the public API and deployed revision.
 
-Document any AI assistance according to your course's policy. The code repository, actual GitHub run, and deployed endpoint—not this README—are the evidence of completion.
+Pull requests targeting `main` run Setup, Dependencies, and Test before merging. Deploy is intentionally skipped for pull requests. Protect `main` with a required pull request and the three required checks; Deploy must not be a required PR check because it does not run there.
+
+A merge into `main` generates a push-to-main workflow. Deploy runs only for a push to `main` after Test succeeds (`needs: test`). Render automatic deploys must remain off so production releases follow the tested GitHub Actions path.
+
+## Production deployment and recording
+
+The existing Render service is working at the live URL above. [`render.yaml`](render.yaml) describes the service, and [`scripts/deploy_render.py`](scripts/deploy_render.py) submits the tested SHA, waits for Render to report it live, and checks both public endpoints. The script verifies the health revision and hello course value; verify the new demonstration field explicitly during the final recording.
+
+See [deployment documentation](docs/DEPLOYMENT.md) for hosting configuration, required checks, secret handling, the recording procedure, and submission evidence. The recording sequence is local tests → commit → push → pull request → required checks → merge → production deployment → live API verification. Keep credentials out of the recording and follow course requirements for AI assistance disclosure.
